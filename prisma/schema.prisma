@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum CompetitorStatus {
+  ACTIVE
+  MONITORING
+  ARCHIVED
+}
+
+enum SupportStatus {
+  SUPPORTED
+  PARTIAL
+  NOT_SUPPORTED
+  UNKNOWN
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          UserRole  @default(VIEWER)
+  avatarUrl     String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  auditLogs     AuditLog[]
+  savedFilters  SavedFilter[]
+  notifications NotificationPreference[]
+}
+
+model Competitor {
+  id            String            @id @default(cuid())
+  name          String
+  websiteUrl    String?
+  logoUrl       String?
+  marketSegment String?
+  notes         String?
+  status        CompetitorStatus  @default(ACTIVE)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  dataSources       DataSource[]
+  featureCoverages  FeatureCoverage[]
+}
+
+model DataSource {
+  id            String    @id @default(cuid())
+  competitorId  String
+  url           String
+  type          String    // website, changelog, docs, g2, capterra
+  lastScraped   DateTime?
+  scrapeEnabled Boolean   @default(true)
+  cadence       String    @default("weekly") // daily, weekly
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  competitor    Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  description   String?
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  subcategories Subcategory[]
+  features      Feature[]
+}
+
+model Subcategory {
+  id            String    @id @default(cuid())
+  name          String
+  categoryId    String
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category      Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  features      Feature[]
+
+  @@unique([name, categoryId])
+}
+
+model Feature {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  categoryId    String?
+  subcategoryId String?
+  isOwnProduct  Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  subcategory   Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  coverages     FeatureCoverage[]
+}
+
+model FeatureCoverage {
+  id            String        @id @default(cuid())
+  featureId     String
+  competitorId  String
+  status        SupportStatus @default(UNKNOWN)
+  evidenceUrl   String?
+  lastVerified  DateTime      @default(now())
+  notes         String?
+  reviewStatus  ReviewStatus  @default(APPROVED)
+  confidence    String?       // HIGH, MEDIUM, LOW (for auto-scraped data)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  feature       Feature       @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  competitor    Competitor    @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, competitorId])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  userId      String
+  action      String    // CREATE, UPDATE, DELETE
+  entityType  String    // Competitor, Feature, FeatureCoverage, etc.
+  entityId    String
+  details     String?   // JSON string of changes
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model SavedFilter {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  filters     String    // JSON string of filter config
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id              String    @id @default(cuid())
+  userId          String
+  alertType       String    // new_feature, status_change, weekly_digest
+  enabled         Boolean   @default(true)
+  competitorId    String?   // null = all competitors
+  categoryId      String?   // null = all categories
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
