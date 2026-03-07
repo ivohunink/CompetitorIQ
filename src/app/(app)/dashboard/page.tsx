@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       label: "Categories",
       value: categoryCount,
       icon: FolderTree,
-      href: "/categories",
+      href: "/coverage",
       color: "text-green-600 bg-green-50",
     },
     {

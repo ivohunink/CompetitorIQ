@@ -12,7 +12,6 @@ import {
   Globe,
   Building2,
   ExternalLink,
-  MoreVertical,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -40,9 +39,18 @@ const statusVariant: Record<string, "success" | "default"> = {
   ARCHIVED: "default",
 };
 
+const SOURCE_TYPE_OPTIONS = [
+  { value: "website", label: "Website / Features" },
+  { value: "changelog", label: "Changelog" },
+  { value: "docs", label: "Documentation" },
+  { value: "g2", label: "G2" },
+  { value: "capterra", label: "Capterra" },
+];
+
 export function CompetitorsClient({ competitors: initial, userRole }: Props) {
   const [competitors, setCompetitors] = useState(initial);
   const [showAdd, setShowAdd] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     websiteUrl: "",
@@ -52,6 +60,16 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
   });
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<string>("all");
+
+  // Source add state
+  const [showAddSource, setShowAddSource] = useState(false);
+  const [sourceCompetitorId, setSourceCompetitorId] = useState<string | null>(null);
+  const [sourceForm, setSourceForm] = useState({
+    url: "",
+    type: "website",
+    cadence: "weekly",
+  });
+
   const canEdit = userRole !== "VIEWER";
 
   const filtered =
@@ -59,24 +77,59 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
       ? competitors
       : competitors.filter((c) => c.status === filter);
 
-  async function handleAdd(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch("/api/competitors", {
-        method: "POST",
+      const method = editId ? "PUT" : "POST";
+      const url = editId ? `/api/competitors/${editId}` : "/api/competitors";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       if (res.ok) {
         const comp = await res.json();
-        setCompetitors([...competitors, { ...comp, _count: { featureCoverages: 0 } }]);
-        setShowAdd(false);
-        setForm({ name: "", websiteUrl: "", marketSegment: "", notes: "", status: "ACTIVE" });
+        if (editId) {
+          setCompetitors(
+            competitors.map((c) => (c.id === editId ? { ...c, ...comp } : c))
+          );
+        } else {
+          setCompetitors([
+            ...competitors,
+            { ...comp, dataSources: [], _count: { featureCoverages: 0 } },
+          ]);
+        }
+        closeForm();
       }
     } finally {
       setSaving(false);
     }
+  }
+
+  function startEdit(comp: Competitor) {
+    setForm({
+      name: comp.name,
+      websiteUrl: comp.websiteUrl || "",
+      marketSegment: comp.marketSegment || "",
+      notes: comp.notes || "",
+      status: comp.status,
+    });
+    setEditId(comp.id);
+    setShowAdd(true);
+  }
+
+  function closeForm() {
+    setShowAdd(false);
+    setEditId(null);
+    setForm({
+      name: "",
+      websiteUrl: "",
+      marketSegment: "",
+      notes: "",
+      status: "ACTIVE",
+    });
   }
 
   async function handleDelete(id: string) {
@@ -84,6 +137,38 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
     const res = await fetch(`/api/competitors/${id}`, { method: "DELETE" });
     if (res.ok) {
       setCompetitors(competitors.filter((c) => c.id !== id));
+    }
+  }
+
+  function openAddSource(competitorId: string) {
+    setSourceCompetitorId(competitorId);
+    setSourceForm({ url: "", type: "website", cadence: "weekly" });
+    setShowAddSource(true);
+  }
+
+  async function handleAddSource(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sourceCompetitorId) return;
+
+    const res = await fetch("/api/datasources", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        competitorId: sourceCompetitorId,
+        ...sourceForm,
+      }),
+    });
+    if (res.ok) {
+      const ds = await res.json();
+      setCompetitors(
+        competitors.map((c) =>
+          c.id === sourceCompetitorId
+            ? { ...c, dataSources: [...c.dataSources, ds] }
+            : c
+        )
+      );
+      setShowAddSource(false);
+      setSourceCompetitorId(null);
     }
   }
 
@@ -149,14 +234,25 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
                       </Badge>
                     </div>
                   </div>
-                  {canEdit && userRole === "ADMIN" && (
-                    <button
-                      onClick={() => handleDelete(comp.id)}
-                      className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  {canEdit && (
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        onClick={() => startEdit(comp)}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        title="Edit"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      {userRole === "ADMIN" && (
+                        <button
+                          onClick={() => handleDelete(comp.id)}
+                          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -185,29 +281,36 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
                   )}
                 </div>
 
-                {comp.dataSources.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {comp.dataSources.map((ds) => (
-                      <Badge key={ds.id} variant="default">
-                        {ds.type}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-2 flex items-center gap-1 flex-wrap">
+                  {comp.dataSources.map((ds) => (
+                    <Badge key={ds.id} variant="default">
+                      {ds.type}
+                    </Badge>
+                  ))}
+                  {canEdit && (
+                    <button
+                      onClick={() => openAddSource(comp.id)}
+                      className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-400 hover:border-brand-400 hover:text-brand-600 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Source
+                    </button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* Add Competitor Modal */}
+      {/* Add/Edit Competitor Modal */}
       <Modal
         isOpen={showAdd}
-        onClose={() => setShowAdd(false)}
-        title="Add Competitor"
+        onClose={closeForm}
+        title={editId ? "Edit Competitor" : "Add Competitor"}
         size="lg"
       >
-        <form onSubmit={handleAdd} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4">
           <Input
             id="comp-name"
             label="Competitor Name"
@@ -235,6 +338,20 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
           />
           <div className="space-y-1">
             <label className="block text-sm font-medium text-gray-700">
+              Status
+            </label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="MONITORING">Monitoring</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">
               Notes
             </label>
             <textarea
@@ -246,16 +363,76 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowAdd(false)}
-            >
+            <Button type="button" variant="secondary" onClick={closeForm}>
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Adding..." : "Add Competitor"}
+              {saving ? "Saving..." : editId ? "Save Changes" : "Add Competitor"}
             </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Add Source Modal */}
+      <Modal
+        isOpen={showAddSource}
+        onClose={() => setShowAddSource(false)}
+        title="Add Data Source"
+      >
+        <form onSubmit={handleAddSource} className="space-y-4">
+          <Input
+            id="source-url"
+            label="URL"
+            type="url"
+            placeholder="https://competitor.com/features"
+            value={sourceForm.url}
+            onChange={(e) =>
+              setSourceForm({ ...sourceForm, url: e.target.value })
+            }
+            required
+          />
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">
+              Source Type
+            </label>
+            <select
+              value={sourceForm.type}
+              onChange={(e) =>
+                setSourceForm({ ...sourceForm, type: e.target.value })
+              }
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              {SOURCE_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-gray-700">
+              Cadence
+            </label>
+            <select
+              value={sourceForm.cadence}
+              onChange={(e) =>
+                setSourceForm({ ...sourceForm, cadence: e.target.value })
+              }
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowAddSource(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Add Source</Button>
           </div>
         </form>
       </Modal>
