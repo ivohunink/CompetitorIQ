@@ -101,9 +101,11 @@ export default function ScrapingConfigPage() {
     setLogsLoading(true);
     try {
       const res = await fetch("/api/scrape-logs?limit=50");
-      const data = await res.json();
-      setScrapeLogs(data.logs);
-      setLogsTotal(data.total);
+      if (res.ok) {
+        const data = await res.json();
+        setScrapeLogs(data.logs || []);
+        setLogsTotal(data.total || 0);
+      }
     } catch {
       // Logs are non-critical
     } finally {
