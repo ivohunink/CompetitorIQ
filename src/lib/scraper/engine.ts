@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { fetchPage } from "./fetcher";
 import { parseContent } from "./parsers";
 import { extractFeatureCoverage } from "./extractor";
+import { notifyFeatureChange } from "@/lib/notifications";
 
 export interface ScrapeResult {
   competitorId: string;
@@ -148,6 +149,20 @@ export async function scrapeCompetitor(
       `[Scraper] New features found for ${competitor.name}:`,
       extraction.newFeatures.map((f) => f.name)
     );
+  }
+
+  // Send in-app notifications
+  if (result.featuresUpdated > 0 || result.newFeaturesFound > 0) {
+    try {
+      await notifyFeatureChange(
+        competitor.name,
+        competitor.id,
+        result.featuresUpdated,
+        result.newFeaturesFound
+      );
+    } catch (error) {
+      console.error("Failed to send notifications:", error);
+    }
   }
 
   return result;

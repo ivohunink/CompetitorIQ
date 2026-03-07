@@ -14,9 +14,9 @@ import {
   Settings,
   Users,
   Bot,
-  Bell,
   LogOut,
 } from "lucide-react";
+import { NotificationBell } from "./notification-bell";
 
 interface SidebarProps {
   userRole: string;
@@ -166,12 +166,7 @@ export function Sidebar({ userRole, userName }: SidebarProps) {
               {userRole.toLowerCase()}
             </p>
           </div>
-          <Link
-            href="/account"
-            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <Bell className="h-4 w-4" />
-          </Link>
+          <NotificationBell />
           <form action="/api/auth/logout" method="POST">
             <button
               type="submit"

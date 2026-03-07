@@ -1,13 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Plus, Search, Filter, Download } from "lucide-react";
+import { Plus, Search, Download, Bookmark, Trash2, ChevronDown } from "lucide-react";
+
+interface SavedFilter {
+  id: string;
+  name: string;
+  filters: string;
+}
 
 interface Feature {
   id: string;
@@ -89,8 +95,53 @@ export function FeatureMatrixClient({
     featureId: string;
     competitorId: string;
   } | null>(null);
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [showSaveFilter, setShowSaveFilter] = useState(false);
+  const [filterName, setFilterName] = useState("");
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
 
   const canEdit = userRole === "ADMIN" || userRole === "EDITOR";
+
+  const loadSavedFilters = useCallback(async () => {
+    try {
+      const res = await fetch("/api/saved-filters");
+      if (res.ok) setSavedFilters(await res.json());
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    loadSavedFilters();
+  }, [loadSavedFilters]);
+
+  async function handleSaveFilter(e: React.FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/saved-filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: filterName,
+        filters: { search, categoryFilter, statusFilter },
+      }),
+    });
+    if (res.ok) {
+      loadSavedFilters();
+      setShowSaveFilter(false);
+      setFilterName("");
+    }
+  }
+
+  function applyFilter(filter: SavedFilter) {
+    const f = JSON.parse(filter.filters);
+    setSearch(f.search || "");
+    setCategoryFilter(f.categoryFilter || "all");
+    setStatusFilter(f.statusFilter || "all");
+    setShowFilterMenu(false);
+  }
+
+  async function deleteFilter(id: string) {
+    await fetch(`/api/saved-filters/${id}`, { method: "DELETE" });
+    setSavedFilters(savedFilters.filter((f) => f.id !== id));
+  }
 
   const filteredFeatures = useMemo(() => {
     return features.filter((f) => {
@@ -256,6 +307,62 @@ export function FeatureMatrixClient({
           <option value="UNKNOWN">Unknown</option>
         </select>
 
+        {/* Saved Filters */}
+        <div className="relative">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowFilterMenu(!showFilterMenu)}
+          >
+            <Bookmark className="mr-1.5 h-4 w-4" />
+            Filters
+            <ChevronDown className="ml-1 h-3 w-3" />
+          </Button>
+          {showFilterMenu && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-56 rounded-lg border border-gray-200 bg-white shadow-lg">
+              <div className="border-b px-3 py-2">
+                <button
+                  onClick={() => {
+                    setShowFilterMenu(false);
+                    setShowSaveFilter(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-brand-600 hover:bg-brand-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Save current filter
+                </button>
+              </div>
+              {savedFilters.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-gray-500">
+                  No saved filters yet
+                </p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto py-1">
+                  {savedFilters.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between px-3 py-1.5 hover:bg-gray-50"
+                    >
+                      <button
+                        onClick={() => applyFilter(f)}
+                        className="flex-1 text-left text-sm text-gray-700"
+                      >
+                        {f.name}
+                      </button>
+                      <button
+                        onClick={() => deleteFilter(f.id)}
+                        className="rounded p-1 text-gray-300 hover:text-red-500"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <Button variant="secondary" size="sm" onClick={exportCSV}>
           <Download className="mr-1.5 h-4 w-4" />
           Export CSV
@@ -388,6 +495,49 @@ export function FeatureMatrixClient({
           <span className="ml-auto italic">Click a cell to cycle status</span>
         )}
       </div>
+
+      {/* Save Filter Modal */}
+      <Modal
+        isOpen={showSaveFilter}
+        onClose={() => setShowSaveFilter(false)}
+        title="Save Filter"
+        size="sm"
+      >
+        <form onSubmit={handleSaveFilter} className="space-y-4">
+          <Input
+            id="filter-name"
+            label="Filter Name"
+            placeholder='e.g., "Scheduling features only"'
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            required
+          />
+          <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+            <p className="font-medium mb-1">Current filter:</p>
+            {search && <p>Search: &ldquo;{search}&rdquo;</p>}
+            {categoryFilter !== "all" && (
+              <p>
+                Category:{" "}
+                {categories.find((c) => c.id === categoryFilter)?.name}
+              </p>
+            )}
+            {statusFilter !== "all" && <p>Status: {statusFilter}</p>}
+            {!search && categoryFilter === "all" && statusFilter === "all" && (
+              <p className="text-gray-400">No filters applied</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setShowSaveFilter(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Save Filter</Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Feature Modal */}
       <Modal
