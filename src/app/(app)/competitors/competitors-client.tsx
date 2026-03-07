@@ -346,7 +346,6 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
               className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
             >
               <option value="ACTIVE">Active</option>
-              <option value="MONITORING">Monitoring</option>
               <option value="ARCHIVED">Archived</option>
             </select>
           </div>

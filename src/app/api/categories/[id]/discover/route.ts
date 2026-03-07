@@ -42,7 +42,7 @@ export async function POST(
   // Fetch all active competitors with enabled data sources
   const competitors = await prisma.competitor.findMany({
     where: {
-      status: { in: ["ACTIVE", "MONITORING"] },
+      status: "ACTIVE",
       dataSources: { some: { scrapeEnabled: true } },
     },
     include: {
