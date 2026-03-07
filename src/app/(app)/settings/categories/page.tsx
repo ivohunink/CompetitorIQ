@@ -324,12 +324,17 @@ export default function ManageCategoriesPage() {
 
     if (res.ok) {
       // Refresh the feature list for affected categories
-      const affectedCategoryIds = new Set<string>();
-      if (featureForm.categoryId) affectedCategoryIds.add(featureForm.categoryId);
-      if (editingFeature?.categoryId) affectedCategoryIds.add(editingFeature.categoryId);
-      if (addingFeatureToCategoryId) affectedCategoryIds.add(addingFeatureToCategoryId);
+      const affectedCategoryIds: string[] = [];
+      if (featureForm.categoryId) affectedCategoryIds.push(featureForm.categoryId);
+      if (editingFeature?.categoryId && !affectedCategoryIds.includes(editingFeature.categoryId)) {
+        affectedCategoryIds.push(editingFeature.categoryId);
+      }
+      if (addingFeatureToCategoryId && !affectedCategoryIds.includes(addingFeatureToCategoryId)) {
+        affectedCategoryIds.push(addingFeatureToCategoryId);
+      }
 
-      for (const catId of affectedCategoryIds) {
+      for (let i = 0; i < affectedCategoryIds.length; i++) {
+        const catId = affectedCategoryIds[i];
         if (expandedIds.has(catId)) {
           await loadFeatures(catId);
         }
