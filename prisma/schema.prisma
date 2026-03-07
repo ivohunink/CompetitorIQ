@@ -63,6 +63,7 @@ model Competitor {
 
   dataSources       DataSource[]
   featureCoverages  FeatureCoverage[]
+  scrapeLogs        ScrapeLog[]
 }
 
 model DataSource {
@@ -160,6 +161,26 @@ model SavedFilter {
   updatedAt   DateTime  @updatedAt
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ScrapeLog {
+  id              String   @id @default(cuid())
+  competitorId    String
+  competitorName  String
+  sourceUrl       String
+  sourceType      String
+  status          String   // "success", "failed", "no_content"
+  contentLength   Int?
+  featuresFound   Int      @default(0)
+  newFeatures     Int      @default(0)
+  error           String?
+  duration        Int?     // milliseconds
+  createdAt       DateTime @default(now())
+
+  competitor      Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@index([competitorId])
+  @@index([createdAt])
 }
 
 model NotificationPreference {
