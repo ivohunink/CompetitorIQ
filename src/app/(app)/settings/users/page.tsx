@@ -91,6 +91,7 @@ export default function UserManagementPage() {
       />
 
       <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-gray-50">
@@ -144,6 +145,7 @@ export default function UserManagementPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Invite User">

@@ -355,6 +355,7 @@ export default function ScrapingConfigPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-gray-50">
@@ -454,6 +455,7 @@ export default function ScrapingConfigPage() {
                     })}
                   </tbody>
                 </table>
+                </div>
               </CardContent>
             </Card>
           ))}

@@ -49,11 +49,11 @@ export default function ComparePage() {
         description="Side-by-side feature comparison of any two competitors."
       />
 
-      <div className="mb-6 flex items-center gap-4">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
         <select
           value={compA}
           onChange={(e) => setCompA(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm min-w-[200px]"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto sm:min-w-[200px]"
         >
           <option value="">Select competitor...</option>
           {competitors.map((c) => (
@@ -68,7 +68,7 @@ export default function ComparePage() {
         <select
           value={compB}
           onChange={(e) => setCompB(e.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm min-w-[200px]"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm sm:w-auto sm:min-w-[200px]"
         >
           <option value="">Select competitor...</option>
           {competitors.map((c) => (
@@ -81,6 +81,7 @@ export default function ComparePage() {
 
       {compA && compB ? (
         <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
@@ -159,6 +160,7 @@ export default function ComparePage() {
               )}
             </tbody>
           </table>
+          </div>
         </Card>
       ) : (
         <Card>

@@ -92,6 +92,7 @@ export default function ManageCompetitorsPage() {
       />
 
       <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-gray-50">
@@ -139,6 +140,7 @@ export default function ManageCompetitorsPage() {
             )}
           </tbody>
         </table>
+        </div>
       </Card>
 
       <Modal isOpen={showAdd} onClose={() => { setShowAdd(false); setEditId(null); }} title={editId ? "Edit Competitor" : "Add Competitor"}>

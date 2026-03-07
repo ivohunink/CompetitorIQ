@@ -163,6 +163,7 @@ export function SourceManager({ competitorId, initialSources }: Props) {
               scraping.
             </p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -268,6 +269,7 @@ export function SourceManager({ competitorId, initialSources }: Props) {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

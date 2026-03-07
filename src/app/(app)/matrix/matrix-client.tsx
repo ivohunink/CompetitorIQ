@@ -475,7 +475,7 @@ export function FeatureMatrixClient({
       </Card>
 
       {/* Legend */}
-      <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <span className="font-medium">Legend:</span>
         {Object.entries(statusConfig).map(([key, config]) => (
           <span key={key} className="flex items-center gap-1.5">
