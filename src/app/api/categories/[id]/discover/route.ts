@@ -94,7 +94,7 @@ export async function POST(
 
         const parsed = parseContent(page.html, source.url, source.type);
         if (parsed.length > 50) {
-          contentParts.push(parsed);
+          contentParts.push(`[Source: ${source.type} - ${source.url}]\n${parsed}`);
           totalSourcesScraped++;
           await prisma.scrapeLog.create({
             data: {

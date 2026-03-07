@@ -42,7 +42,9 @@ For each KNOWN feature, determine if ${competitorName} supports it based on the 
 - PARTIAL: Feature exists but with limitations or only basic version
 - NOT_SUPPORTED: Only if there is clear indication it's missing (don't guess)
 
-Also identify any NEW features not in the known list that are clearly workforce management features.
+Also identify any NEW features not in the known list that are clearly product features.
+A "feature" is a concrete product capability that users interact with (e.g., "Shift templates", "GPS clock-in", "Push notifications").
+Do NOT report marketing benefits or value propositions as features (e.g., "Streamlined workforce management" is NOT a feature).
 
 Respond with ONLY valid JSON in this exact format, no other text:
 {
@@ -59,7 +61,8 @@ Rules:
 - Do NOT include features where there is no evidence either way
 - confidence: HIGH = direct mention, MEDIUM = inferred from context, LOW = uncertain
 - Keep evidence strings under 100 characters
-- For new features, only include clearly distinct workforce management features`;
+- New feature names should be 2-5 words using standard product terminology
+- Do NOT include vague capabilities like "Enterprise security" or "Seamless integration"`;
 
   try {
     const message = await anthropic.messages.create({

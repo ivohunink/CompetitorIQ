@@ -80,14 +80,25 @@ export async function discoverCategoryFeatures(
   const competitorSections = scrapedContentByCompetitor
     .map(
       (c) =>
-        `--- ${c.competitorName} ---\n${c.content.slice(0, 4000)}`
+        `--- ${c.competitorName} ---\n${c.content.slice(0, 6000)}`
     )
     .join("\n\n");
 
-  const prompt = `You are a product analyst for workforce management SaaS tools. Your task is to discover specific, narrow features that belong to a particular category by analyzing scraped competitor content.
+  const prompt = `You are a product analyst specializing in SaaS tools. Your task is to discover ALL concrete product features that belong to a particular category by analyzing scraped competitor content.
 
 CATEGORY: ${categoryName}
 CATEGORY DESCRIPTION: ${categoryDescription}
+
+IMPORTANT — WHAT COUNTS AS A "FEATURE":
+A feature is a specific, concrete product capability that a user can interact with, configure, or receive.
+GOOD feature names: "Push notifications", "Group messaging", "Read receipts", "Document sharing", "Shift swap requests", "Auto-scheduling", "News feed", "Employee directory"
+BAD — these are marketing values/benefits, NOT features:
+  - "HQ-to-frontline communication bridge" (marketing tagline)
+  - "Unified employee experience" (benefit/outcome)
+  - "Enterprise-grade security" (too vague)
+  - "Seamless workforce management" (value proposition)
+
+Feature names should be 2-5 words using standard product terminology — the way they would appear in a product comparison spreadsheet, not in a marketing brochure.
 
 EXISTING FEATURES (do NOT include these):
 ${existingFeatureNames.length > 0 ? existingFeatureNames.map((f) => `- ${f}`).join("\n") : "(none)"}
@@ -95,13 +106,16 @@ ${existingFeatureNames.length > 0 ? existingFeatureNames.map((f) => `- ${f}`).jo
 SCRAPED COMPETITOR CONTENT:
 ${competitorSections}
 
-Extract NARROW, SPECIFIC features that fall within this category. Rules:
-- Features should be specific capabilities, not broad categories (e.g., "Shift swap requests" not "Scheduling")
-- Each feature should be a single, distinct capability a product could have
-- Deduplicate: if multiple competitors mention the same feature, list it once with all competitors
-- Do NOT include features already in the existing features list
-- Only include features where you have evidence from the scraped content
-- For each competitor that supports a feature, provide a brief evidence quote
+EXTRACTION RULES:
+1. Extract ALL distinct features you can identify. Aim for 10-25 features. Be comprehensive.
+2. Each feature must be a specific, user-facing capability — something a user clicks, configures, or receives.
+3. Do NOT include marketing slogans, value propositions, benefits, or vague descriptors.
+4. Use standard product terminology for names (e.g., "Read receipts" not "Message read confirmation tracking for managers").
+5. Keep names to 2-5 words. If a name exceeds 5 words, generalize it.
+6. Deduplicate: if multiple competitors mention the same capability, list it once with all competitors.
+7. Do NOT include features already in the existing features list.
+8. For each competitor, provide a brief evidence quote from the scraped content.
+9. If the scraped content is mostly marketing language, look past the slogans and infer what concrete capabilities must exist to deliver the claimed value.
 
 Respond with ONLY valid JSON in this exact format, no other text:
 [
@@ -119,7 +133,7 @@ If no features found, return an empty array: []`;
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 4000,
+      max_tokens: 8000,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -149,11 +163,15 @@ export async function extractFeaturesFromText(
 > {
   const prompt = `You are a product analyst. Extract individual product features from the following text about ${competitorName}'s product.
 
+A "feature" is a specific, concrete product capability that users interact with (e.g., "Auto-scheduling", "GPS clock-in", "Push notifications", "Group messaging").
+Do NOT extract marketing benefits, value propositions, or vague descriptors (e.g., "Seamless workforce management" or "Enterprise-grade platform" are NOT features).
+Feature names should be 2-5 words using standard product terminology.
+
 Text:
 ${text.slice(0, 4000)}
 
 For each feature found, provide:
-- name: A short canonical name (e.g., "Auto-scheduling", "GPS Verification")
+- name: A short canonical name (2-5 words, e.g., "Auto-scheduling", "GPS Verification")
 - description: A brief description of what it does
 - category: One of: ${DOMAIN_CATEGORIES.join(", ")}
 - confidence: HIGH if clearly a distinct feature, MEDIUM if inferred, LOW if uncertain
