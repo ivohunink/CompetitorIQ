@@ -117,7 +117,7 @@ export default function ManageCompetitorsPage() {
                 </td>
                 <td className="px-4 py-3 text-gray-500">{comp.marketSegment || "—"}</td>
                 <td className="px-4 py-3">
-                  <Badge variant={comp.status === "ACTIVE" ? "success" : comp.status === "MONITORING" ? "warning" : "default"}>
+                  <Badge variant={comp.status === "ACTIVE" ? "success" : "default"}>
                     {comp.status.toLowerCase()}
                   </Badge>
                 </td>
@@ -150,7 +150,6 @@ export default function ManageCompetitorsPage() {
             <label className="block text-sm font-medium text-gray-700">Status</label>
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
               <option value="ACTIVE">Active</option>
-              <option value="MONITORING">Monitoring</option>
               <option value="ARCHIVED">Archived</option>
             </select>
           </div>

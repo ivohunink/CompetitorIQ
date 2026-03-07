@@ -35,9 +35,8 @@ interface Props {
   userRole: string;
 }
 
-const statusVariant: Record<string, "success" | "warning" | "default"> = {
+const statusVariant: Record<string, "success" | "default"> = {
   ACTIVE: "success",
-  MONITORING: "warning",
   ARCHIVED: "default",
 };
 
@@ -92,7 +91,7 @@ export function CompetitorsClient({ competitors: initial, userRole }: Props) {
     <>
       <div className="mb-4 flex items-center gap-3">
         <div className="flex gap-2">
-          {["all", "ACTIVE", "MONITORING", "ARCHIVED"].map((s) => (
+          {["all", "ACTIVE", "ARCHIVED"].map((s) => (
             <button
               key={s}
               onClick={() => setFilter(s)}
