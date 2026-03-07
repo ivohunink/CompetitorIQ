@@ -11,7 +11,9 @@ export function parseWebsite(html: string, url: string): string {
     '[class*="feature"]',
     '[class*="pricing"]',
     '[class*="capability"]',
-    '[class*="benefit"]',
+    '[class*="product"]',
+    '[class*="solution"]',
+    '[class*="module"]',
     '[id*="feature"]',
     '[id*="pricing"]',
     "main",
@@ -48,6 +50,25 @@ export function parseWebsite(html: string, url: string): string {
     }
   });
 
-  const result = sections.join("\n\n").slice(0, 8000);
-  return result || $("body").text().replace(/\s+/g, " ").trim().slice(0, 8000);
+  // Extract table rows (feature comparison tables)
+  $("table tr").each((_, el) => {
+    const text = $(el).text().replace(/\s+/g, " ").trim();
+    if (text.length > 10 && text.length < 500) {
+      sections.push(`| ${text}`);
+    }
+  });
+
+  // Extract definition lists (common for feature specs)
+  $("dl dt").each((_, el) => {
+    const term = $(el).text().trim();
+    const def = $(el).next("dd").text().trim();
+    if (term && def) {
+      sections.push(`${term}: ${def}`);
+    }
+  });
+
+  // Deduplicate sections before joining
+  const uniqueSections = Array.from(new Set(sections));
+  const result = uniqueSections.join("\n\n").slice(0, 12000);
+  return result || $("body").text().replace(/\s+/g, " ").trim().slice(0, 12000);
 }
