@@ -76,7 +76,7 @@ async function main() {
     { name: "Homebase", websiteUrl: "https://joinhomebase.com", marketSegment: "SMB Time & Scheduling", status: "ACTIVE" as const },
     { name: "Sling", websiteUrl: "https://getsling.com", marketSegment: "Shift Management", status: "ACTIVE" as const },
     { name: "Connecteam", websiteUrl: "https://connecteam.com", marketSegment: "Deskless Workforce", status: "ACTIVE" as const },
-    { name: "7shifts", websiteUrl: "https://www.7shifts.com", marketSegment: "Restaurant Scheduling", status: "MONITORING" as const },
+    { name: "7shifts", websiteUrl: "https://www.7shifts.com", marketSegment: "Restaurant Scheduling", status: "ACTIVE" as const },
   ];
 
   const competitors: Record<string, any> = {};
