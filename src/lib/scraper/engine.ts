@@ -52,14 +52,28 @@ export async function scrapeCompetitor(
 
   // Scrape each data source and aggregate content
   const allContent: string[] = [];
+  const successLogIds: string[] = [];
 
   for (const source of competitor.dataSources) {
+    const startTime = Date.now();
     try {
       const page = await fetchPage(source.url);
+      const duration = Date.now() - startTime;
 
       if (!page.success) {
         result.sourcesFailed++;
         result.errors.push(`Failed to fetch ${source.url}: ${page.error}`);
+        await prisma.scrapeLog.create({
+          data: {
+            competitorId,
+            competitorName: competitor.name,
+            sourceUrl: source.url,
+            sourceType: source.type,
+            status: "failed",
+            error: page.error || "Fetch failed",
+            duration,
+          },
+        });
         continue;
       }
 
@@ -67,9 +81,32 @@ export async function scrapeCompetitor(
       if (parsed.length > 50) {
         allContent.push(`[Source: ${source.type} - ${source.url}]\n${parsed}`);
         result.sourcesScraped++;
+        const log = await prisma.scrapeLog.create({
+          data: {
+            competitorId,
+            competitorName: competitor.name,
+            sourceUrl: source.url,
+            sourceType: source.type,
+            status: "success",
+            contentLength: parsed.length,
+            duration,
+          },
+        });
+        successLogIds.push(log.id);
       } else {
         result.sourcesFailed++;
         result.errors.push(`No meaningful content from ${source.url}`);
+        await prisma.scrapeLog.create({
+          data: {
+            competitorId,
+            competitorName: competitor.name,
+            sourceUrl: source.url,
+            sourceType: source.type,
+            status: "no_content",
+            contentLength: parsed.length,
+            duration,
+          },
+        });
       }
 
       // Update lastScraped timestamp
@@ -78,10 +115,21 @@ export async function scrapeCompetitor(
         data: { lastScraped: new Date() },
       });
     } catch (error) {
+      const duration = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
       result.sourcesFailed++;
-      result.errors.push(
-        `Error scraping ${source.url}: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      result.errors.push(`Error scraping ${source.url}: ${errorMsg}`);
+      await prisma.scrapeLog.create({
+        data: {
+          competitorId,
+          competitorName: competitor.name,
+          sourceUrl: source.url,
+          sourceType: source.type,
+          status: "failed",
+          error: errorMsg,
+          duration,
+        },
+      });
     }
   }
 
@@ -100,6 +148,17 @@ export async function scrapeCompetitor(
     knownFeatureNames,
     sourceUrls
   );
+
+  // Update successful logs with feature counts
+  if (successLogIds.length > 0) {
+    await prisma.scrapeLog.updateMany({
+      where: { id: { in: successLogIds } },
+      data: {
+        featuresFound: extraction.knownFeatures.length,
+        newFeatures: extraction.newFeatures.length,
+      },
+    });
+  }
 
   // Upsert feature coverages with PENDING review status
   for (const fc of extraction.knownFeatures) {

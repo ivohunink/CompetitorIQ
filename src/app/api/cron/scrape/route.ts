@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDueCompetitors, scrapeCompetitor } from "@/lib/scraper/engine";
+import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
   // Verify the request is from Vercel Cron
@@ -30,6 +31,11 @@ export async function GET(request: NextRequest) {
       });
     }
   }
+
+  // Clean up scrape logs older than 30 days
+  await prisma.scrapeLog.deleteMany({
+    where: { createdAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+  });
 
   return NextResponse.json({
     processed: results.length,

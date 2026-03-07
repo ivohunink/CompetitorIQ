@@ -20,6 +20,9 @@ import {
   FileText,
   BookOpen,
   Star,
+  ChevronDown,
+  ChevronRight,
+  AlertCircle,
 } from "lucide-react";
 
 interface DataSource {
@@ -40,6 +43,20 @@ interface ScrapeResult {
   featuresUpdated: number;
   newFeaturesFound: number;
   errors: string[];
+}
+
+interface ScrapeLogEntry {
+  id: string;
+  competitorName: string;
+  sourceUrl: string;
+  sourceType: string;
+  status: string;
+  contentLength: number | null;
+  featuresFound: number;
+  newFeatures: number;
+  error: string | null;
+  duration: number | null;
+  createdAt: string;
 }
 
 const SOURCE_TYPE_OPTIONS = [
@@ -68,6 +85,10 @@ export default function ScrapingConfigPage() {
   const [scrapeResults, setScrapeResults] = useState<
     Record<string, ScrapeResult>
   >({});
+  const [scrapeLogs, setScrapeLogs] = useState<ScrapeLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [showLogs, setShowLogs] = useState(true);
+  const [logsTotal, setLogsTotal] = useState(0);
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
     competitorId: "",
@@ -75,6 +96,20 @@ export default function ScrapingConfigPage() {
     type: "website",
     cadence: "weekly",
   });
+
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch("/api/scrape-logs?limit=50");
+      const data = await res.json();
+      setScrapeLogs(data.logs);
+      setLogsTotal(data.total);
+    } catch {
+      // Logs are non-critical
+    } finally {
+      setLogsLoading(false);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -87,7 +122,8 @@ export default function ScrapingConfigPage() {
     setDataSources(ds);
     setCompetitors(comps);
     setLoading(false);
-  }, []);
+    loadLogs();
+  }, [loadLogs]);
 
   useEffect(() => {
     loadData();
@@ -422,6 +458,168 @@ export default function ScrapingConfigPage() {
         </div>
       )}
 
+      {/* Recent Scrape Activity */}
+      <Card className="mt-6">
+        <CardHeader>
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="flex w-full items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="text-left">
+                <h3 className="font-semibold text-gray-900">
+                  Recent Scrape Activity
+                </h3>
+                <p className="text-sm text-gray-500">
+                  {logsTotal} total log entries
+                </p>
+              </div>
+            </div>
+            {showLogs ? (
+              <ChevronDown className="h-5 w-5 text-gray-400" />
+            ) : (
+              <ChevronRight className="h-5 w-5 text-gray-400" />
+            )}
+          </button>
+        </CardHeader>
+        {showLogs && (
+          <CardContent>
+            {logsLoading && scrapeLogs.length === 0 ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              </div>
+            ) : scrapeLogs.length === 0 ? (
+              <p className="py-8 text-center text-sm text-gray-500">
+                No scrape activity yet. Trigger a manual scrape to see logs here.
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="px-3 py-2 text-left font-medium text-gray-600">
+                          Time
+                        </th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-600">
+                          Competitor
+                        </th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-600">
+                          Source
+                        </th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-600">
+                          Status
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">
+                          Content
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">
+                          Features
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">
+                          Duration
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scrapeLogs.map((log) => (
+                        <tr
+                          key={log.id}
+                          className="border-b border-gray-100 last:border-0"
+                        >
+                          <td className="px-3 py-2 text-gray-500">
+                            {formatLastScraped(log.createdAt)}
+                          </td>
+                          <td className="px-3 py-2 font-medium text-gray-900">
+                            {log.competitorName}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-gray-400 capitalize">
+                                {log.sourceType}
+                              </span>
+                              <a
+                                href={log.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-brand-600 hover:underline truncate block max-w-[200px]"
+                                title={log.sourceUrl}
+                              >
+                                {log.sourceUrl
+                                  .replace(/^https?:\/\//, "")
+                                  .slice(0, 40)}
+                              </a>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <ScrapeStatusBadge status={log.status} />
+                            {log.error && (
+                              <div className="mt-1 flex items-start gap-1 text-xs text-red-500">
+                                <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                <span className="truncate max-w-[200px]" title={log.error}>
+                                  {log.error}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600">
+                            {log.contentLength != null
+                              ? log.contentLength.toLocaleString()
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-600">
+                            {log.featuresFound > 0 || log.newFeatures > 0 ? (
+                              <span>
+                                {log.featuresFound}
+                                {log.newFeatures > 0 && (
+                                  <span className="text-green-600">
+                                    {" "}
+                                    +{log.newFeatures} new
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-500">
+                            {log.duration != null
+                              ? log.duration < 1000
+                                ? `${log.duration}ms`
+                                : `${(log.duration / 1000).toFixed(1)}s`
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {scrapeLogs.length < logsTotal && (
+                  <div className="mt-3 text-center">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={async () => {
+                        const res = await fetch(
+                          `/api/scrape-logs?limit=50&offset=${scrapeLogs.length}`
+                        );
+                        const data = await res.json();
+                        setScrapeLogs([...scrapeLogs, ...data.logs]);
+                      }}
+                    >
+                      Load More ({scrapeLogs.length} of {logsTotal})
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
       {/* Add data source modal */}
       <Modal
         isOpen={showAdd}
@@ -505,6 +703,19 @@ export default function ScrapingConfigPage() {
       </Modal>
     </>
   );
+}
+
+function ScrapeStatusBadge({ status }: { status: string }) {
+  const variant =
+    status === "success"
+      ? "success"
+      : status === "failed"
+        ? "danger"
+        : "warning";
+  const label =
+    status === "no_content" ? "no content" : status;
+
+  return <Badge variant={variant}>{label}</Badge>;
 }
 
 function ScrapeResultBadge({ result }: { result: ScrapeResult }) {
