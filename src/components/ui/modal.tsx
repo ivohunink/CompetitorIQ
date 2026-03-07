@@ -39,7 +39,7 @@ export function Modal({
     >
       <div
         className={cn(
-          "bg-white rounded-xl shadow-xl max-h-[85vh] overflow-y-auto",
+          "mx-4 bg-white rounded-xl shadow-xl max-h-[85vh] overflow-y-auto sm:mx-0",
           {
             "w-full max-w-md": size === "sm",
             "w-full max-w-lg": size === "md",
