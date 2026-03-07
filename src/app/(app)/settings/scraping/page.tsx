@@ -328,7 +328,7 @@ export default function ScrapingConfigPage() {
                     </h3>
                     <Badge
                       variant={
-                        competitor.status === "ACTIVE" ? "success" : "warning"
+                        competitor.status === "ACTIVE" ? "success" : "default"
                       }
                     >
                       {competitor.status.toLowerCase()}

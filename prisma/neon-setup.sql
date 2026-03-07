@@ -6,7 +6,7 @@
 -- ============================================================
 
 CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'EDITOR', 'VIEWER');
-CREATE TYPE "CompetitorStatus" AS ENUM ('ACTIVE', 'MONITORING', 'ARCHIVED');
+CREATE TYPE "CompetitorStatus" AS ENUM ('ACTIVE', 'ARCHIVED');
 CREATE TYPE "SupportStatus" AS ENUM ('SUPPORTED', 'PARTIAL', 'NOT_SUPPORTED', 'UNKNOWN');
 CREATE TYPE "ReviewStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
@@ -172,7 +172,7 @@ INSERT INTO "Competitor" ("id", "name", "websiteUrl", "marketSegment", "status",
   ('comp-homebase', 'Homebase', 'https://joinhomebase.com', 'SMB Time & Scheduling', 'ACTIVE', CURRENT_TIMESTAMP),
   ('comp-sling', 'Sling', 'https://getsling.com', 'Shift Management', 'ACTIVE', CURRENT_TIMESTAMP),
   ('comp-connecteam', 'Connecteam', 'https://connecteam.com', 'Deskless Workforce', 'ACTIVE', CURRENT_TIMESTAMP),
-  ('comp-7shifts', '7shifts', 'https://www.7shifts.com', 'Restaurant Scheduling', 'MONITORING', CURRENT_TIMESTAMP);
+  ('comp-7shifts', '7shifts', 'https://www.7shifts.com', 'Restaurant Scheduling', 'ACTIVE', CURRENT_TIMESTAMP);
 
 -- Features
 INSERT INTO "Feature" ("id", "name", "description", "categoryId", "updatedAt") VALUES

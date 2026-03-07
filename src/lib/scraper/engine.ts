@@ -237,7 +237,7 @@ export async function getDueCompetitors(): Promise<
   // Find competitors with data sources that are due for scraping
   const competitors = await prisma.competitor.findMany({
     where: {
-      status: { in: ["ACTIVE", "MONITORING"] },
+      status: "ACTIVE",
       dataSources: {
         some: {
           scrapeEnabled: true,
