@@ -7,6 +7,7 @@ import { cn, supportStatusIcon, formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { Globe, ExternalLink, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SourceManager } from "./source-manager";
 
 export default async function CompetitorProfilePage({
   params,
@@ -157,6 +158,14 @@ export default async function CompetitorProfilePage({
             </CardContent>
           </Card>
         )}
+      </div>
+
+      {/* Data Sources */}
+      <div className="mt-6">
+        <SourceManager
+          competitorId={competitor.id}
+          initialSources={JSON.parse(JSON.stringify(competitor.dataSources))}
+        />
       </div>
 
       {/* Notes */}
