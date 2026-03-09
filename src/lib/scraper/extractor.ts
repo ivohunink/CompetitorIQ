@@ -9,16 +9,20 @@ export interface ExtractedCoverage {
   status: "SUPPORTED" | "PARTIAL" | "NOT_SUPPORTED";
   confidence: "HIGH" | "MEDIUM" | "LOW";
   evidence: string;
+  sourceUrl?: string;
+}
+
+export interface ExtractedNewFeature {
+  name: string;
+  description: string;
+  suggestedCategory: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  sourceUrl?: string;
 }
 
 export interface ExtractionResult {
   knownFeatures: ExtractedCoverage[];
-  newFeatures: Array<{
-    name: string;
-    description: string;
-    suggestedCategory: string;
-    confidence: "HIGH" | "MEDIUM" | "LOW";
-  }>;
+  newFeatures: ExtractedNewFeature[];
 }
 
 export async function extractFeatureCoverage(
@@ -49,10 +53,10 @@ Do NOT report marketing benefits or value propositions as features (e.g., "Strea
 Respond with ONLY valid JSON in this exact format, no other text:
 {
   "knownFeatures": [
-    {"featureName": "exact feature name from list", "status": "SUPPORTED", "confidence": "HIGH", "evidence": "brief quote or reason"}
+    {"featureName": "exact feature name from list", "status": "SUPPORTED", "confidence": "HIGH", "evidence": "brief quote or reason", "sourceUrl": "URL from [Source: ...] header where evidence was found"}
   ],
   "newFeatures": [
-    {"name": "Feature Name", "description": "What it does", "suggestedCategory": "Category Name", "confidence": "HIGH"}
+    {"name": "Feature Name", "description": "What it does", "suggestedCategory": "Category Name", "confidence": "HIGH", "sourceUrl": "URL from [Source: ...] header where feature was found"}
   ]
 }
 
@@ -62,7 +66,8 @@ Rules:
 - confidence: HIGH = direct mention, MEDIUM = inferred from context, LOW = uncertain
 - Keep evidence strings under 100 characters
 - New feature names should be 2-5 words using standard product terminology
-- Do NOT include vague capabilities like "Enterprise security" or "Seamless integration"`;
+- Do NOT include vague capabilities like "Enterprise security" or "Seamless integration"
+- For each feature, include the sourceUrl from the [Source: type - url] header where you found the strongest evidence`;
 
   try {
     const message = await anthropic.messages.create({

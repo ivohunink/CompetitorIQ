@@ -70,6 +70,7 @@ model Competitor {
   dataSources       DataSource[]
   featureCoverages  FeatureCoverage[]
   scrapeLogs        ScrapeLog[]
+  scrapeRuns        ScrapeRun[]
 }
 
 model DataSource {
@@ -123,9 +124,10 @@ model Feature {
 
   category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   subcategory   Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
-  coverages     FeatureCoverage[]
-  duplicatesAsA FeatureDuplicate[] @relation("DuplicateA")
-  duplicatesAsB FeatureDuplicate[] @relation("DuplicateB")
+  coverages             FeatureCoverage[]
+  duplicatesAsA         FeatureDuplicate[] @relation("DuplicateA")
+  duplicatesAsB         FeatureDuplicate[] @relation("DuplicateB")
+  scrapeFeatureResults  ScrapeFeatureResult[]
 }
 
 model FeatureCoverage {
@@ -170,6 +172,28 @@ model SavedFilter {
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model ScrapeRun {
+  id              String    @id @default(cuid())
+  competitorId    String
+  competitorName  String
+  status          String    // "running", "completed", "failed"
+  sourcesScraped  Int       @default(0)
+  sourcesFailed   Int       @default(0)
+  featuresFound   Int       @default(0)
+  newFeatures     Int       @default(0)
+  totalDuration   Int?      // milliseconds
+  errors          String?   // JSON array of error strings
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  competitor      Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  scrapeLogs      ScrapeLog[]
+  featureResults  ScrapeFeatureResult[]
+
+  @@index([competitorId])
+  @@index([createdAt])
+}
+
 model ScrapeLog {
   id              String   @id @default(cuid())
   competitorId    String
@@ -182,12 +206,45 @@ model ScrapeLog {
   newFeatures     Int      @default(0)
   error           String?
   duration        Int?     // milliseconds
+  runId           String?
   createdAt       DateTime @default(now())
 
   competitor      Competitor @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+  scrapeRun       ScrapeRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  pageContent     ScrapePageContent?
 
   @@index([competitorId])
   @@index([createdAt])
+  @@index([runId])
+}
+
+model ScrapePageContent {
+  id            String   @id @default(cuid())
+  scrapeLogId   String   @unique
+  rawText       String
+  createdAt     DateTime @default(now())
+
+  scrapeLog     ScrapeLog @relation(fields: [scrapeLogId], references: [id], onDelete: Cascade)
+}
+
+model ScrapeFeatureResult {
+  id            String   @id @default(cuid())
+  scrapeRunId   String
+  featureName   String
+  featureId     String?
+  isNew         Boolean  @default(false)
+  status        String?  // SUPPORTED, PARTIAL, NOT_SUPPORTED
+  confidence    String   // HIGH, MEDIUM, LOW
+  evidence      String?
+  sourceUrl     String?
+  sourceType    String?
+  createdAt     DateTime @default(now())
+
+  scrapeRun     ScrapeRun @relation(fields: [scrapeRunId], references: [id], onDelete: Cascade)
+  feature       Feature?  @relation(fields: [featureId], references: [id], onDelete: SetNull)
+
+  @@index([scrapeRunId])
+  @@index([featureId])
 }
 
 model NotificationPreference {

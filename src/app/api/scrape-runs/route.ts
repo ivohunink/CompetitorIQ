@@ -13,25 +13,20 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
   const offset = parseInt(searchParams.get("offset") || "0");
 
-  const runId = searchParams.get("runId");
-
   const where: Record<string, unknown> = {};
   if (competitorId) {
     where.competitorId = competitorId;
   }
-  if (runId) {
-    where.runId = runId;
-  }
 
-  const [logs, total] = await Promise.all([
-    prisma.scrapeLog.findMany({
+  const [runs, total] = await Promise.all([
+    prisma.scrapeRun.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,
     }),
-    prisma.scrapeLog.count({ where }),
+    prisma.scrapeRun.count({ where }),
   ]);
 
-  return NextResponse.json({ logs, total });
+  return NextResponse.json({ runs, total });
 }
