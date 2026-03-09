@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
-import { fetchPage } from "./fetcher";
+import { fetchPage, computeContentHash } from "./fetcher";
 import { parseContent } from "./parsers";
 import { extractFeatureCoverage } from "./extractor";
 import { notifyFeatureChange } from "@/lib/notifications";
+import { isAllowedByRobotsTxt, domainDelay } from "./politeness";
+import { discoverLinks } from "./crawler";
 
 export interface ScrapeResult {
   competitorId: string;
@@ -72,8 +74,53 @@ export async function scrapeCompetitor(
     for (const source of competitor.dataSources) {
       const startTime = Date.now();
       try {
-        const page = await fetchPage(source.url);
+        // Check robots.txt before fetching
+        const allowed = await isAllowedByRobotsTxt(source.url);
+        if (!allowed) {
+          result.errors.push(`Blocked by robots.txt: ${source.url}`);
+          await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "blocked_robots",
+              duration: Date.now() - startTime,
+              runId: scrapeRun.id,
+            },
+          });
+          continue;
+        }
+
+        // Per-domain rate limiting
+        await domainDelay(source.url);
+
+        const page = await fetchPage(source.url, {
+          etag: source.lastEtag ?? undefined,
+          lastModified: source.lastModified ?? undefined,
+        });
         const duration = Date.now() - startTime;
+
+        // Handle 304 Not Modified
+        if (page.unchanged) {
+          result.sourcesScraped++;
+          await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "unchanged_304",
+              duration,
+              runId: scrapeRun.id,
+            },
+          });
+          await prisma.dataSource.update({
+            where: { id: source.id },
+            data: { lastScraped: new Date() },
+          });
+          continue;
+        }
 
         if (!page.success) {
           result.sourcesFailed++;
@@ -93,11 +140,80 @@ export async function scrapeCompetitor(
           continue;
         }
 
+        // Parse parent page
         const parsed = parseContent(page.html, source.url, source.type);
-        if (parsed.length > 50) {
-          allContent.push(
-            `[Source: ${source.type} - ${source.url}]\n${parsed}`
-          );
+
+        // Depth-2 crawling: discover and fetch child pages
+        const childLinks = discoverLinks(page.html, source.url);
+        const childTexts: string[] = [];
+
+        for (const childUrl of childLinks) {
+          const childAllowed = await isAllowedByRobotsTxt(childUrl);
+          if (!childAllowed) continue;
+
+          await domainDelay(childUrl);
+
+          try {
+            const childPage = await fetchPage(childUrl);
+            if (childPage.success && !childPage.unchanged) {
+              const childParsed = parseContent(
+                childPage.html,
+                childUrl,
+                source.type
+              );
+              if (childParsed.length > 50) {
+                childTexts.push(
+                  `[Source: ${source.type} - ${childUrl}]\n${childParsed}`
+                );
+              }
+            }
+          } catch {
+            // Skip failed child pages silently — parent page is the priority
+          }
+        }
+
+        // Combine parent + child content
+        const combinedSourceText = [
+          parsed.length > 50
+            ? `[Source: ${source.type} - ${source.url}]\n${parsed}`
+            : "",
+          ...childTexts,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+
+        // Content hash comparison — skip AI if nothing changed
+        const newHash = computeContentHash(combinedSourceText);
+        if (
+          combinedSourceText.length > 50 &&
+          newHash === source.contentHash
+        ) {
+          result.sourcesScraped++;
+          await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "unchanged_hash",
+              contentLength: combinedSourceText.length,
+              duration: Date.now() - startTime,
+              runId: scrapeRun.id,
+            },
+          });
+          await prisma.dataSource.update({
+            where: { id: source.id },
+            data: {
+              lastScraped: new Date(),
+              lastEtag: page.etag ?? source.lastEtag,
+              lastModified: page.lastModified ?? source.lastModified,
+            },
+          });
+          continue;
+        }
+
+        if (combinedSourceText.length > 50) {
+          allContent.push(combinedSourceText);
           result.sourcesScraped++;
           const log = await prisma.scrapeLog.create({
             data: {
@@ -106,18 +222,18 @@ export async function scrapeCompetitor(
               sourceUrl: source.url,
               sourceType: source.type,
               status: "success",
-              contentLength: parsed.length,
-              duration,
+              contentLength: combinedSourceText.length,
+              duration: Date.now() - startTime,
               runId: scrapeRun.id,
             },
           });
           successLogIds.push(log.id);
 
-          // Store the full parsed text for this page
+          // Store the full parsed text for this source (parent + children)
           await prisma.scrapePageContent.create({
             data: {
               scrapeLogId: log.id,
-              rawText: parsed,
+              rawText: combinedSourceText,
             },
           });
         } else {
@@ -130,17 +246,22 @@ export async function scrapeCompetitor(
               sourceUrl: source.url,
               sourceType: source.type,
               status: "no_content",
-              contentLength: parsed.length,
-              duration,
+              contentLength: combinedSourceText.length,
+              duration: Date.now() - startTime,
               runId: scrapeRun.id,
             },
           });
         }
 
-        // Update lastScraped timestamp
+        // Update lastScraped and cache headers
         await prisma.dataSource.update({
           where: { id: source.id },
-          data: { lastScraped: new Date() },
+          data: {
+            lastScraped: new Date(),
+            contentHash: newHash,
+            lastEtag: page.etag ?? null,
+            lastModified: page.lastModified ?? null,
+          },
         });
       } catch (error) {
         const duration = Date.now() - startTime;

@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: "No competitors due for scraping" });
   }
 
-  // Process up to 3 competitors per cron run to stay within timeout
-  const batch = dueCompetitors.slice(0, 3);
+  // Process competitors per cron run (configurable, default 5)
+  const batchSize = parseInt(process.env.SCRAPE_BATCH_SIZE ?? "5", 10);
+  const batch = dueCompetitors.slice(0, batchSize);
   const results = [];
 
   for (const competitor of batch) {

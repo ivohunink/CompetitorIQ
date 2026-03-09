@@ -81,6 +81,9 @@ model DataSource {
   lastScraped   DateTime?
   scrapeEnabled Boolean   @default(true)
   cadence       String    @default("weekly") // daily, weekly
+  contentHash   String?   // SHA-256 of last parsed content
+  lastEtag      String?   // ETag header from last successful response
+  lastModified  String?   // Last-Modified header from last successful response
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
