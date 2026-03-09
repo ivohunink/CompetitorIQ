@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { categorizeFeature } from "@/lib/ai";
+import { checkNewFeatureForDuplicates } from "@/lib/duplicates";
 
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -112,6 +113,11 @@ export async function POST(req: NextRequest) {
       details: JSON.stringify({ name, categoryId: finalCategoryId }),
     },
   });
+
+  // Fire-and-forget duplicate check for the new feature
+  checkNewFeatureForDuplicates(feature.id, feature.name).catch((err) =>
+    console.error("Duplicate check failed:", err)
+  );
 
   return NextResponse.json(feature, { status: 201 });
 }

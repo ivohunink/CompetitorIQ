@@ -32,6 +32,12 @@ enum ReviewStatus {
   REJECTED
 }
 
+enum DuplicateStatus {
+  PENDING
+  CONFIRMED
+  DISMISSED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -47,6 +53,7 @@ model User {
   savedFilters  SavedFilter[]
   notificationPrefs NotificationPreference[]
   notifications     Notification[]
+  resolvedDuplicates FeatureDuplicate[]
 }
 
 model Competitor {
@@ -117,6 +124,8 @@ model Feature {
   category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   subcategory   Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   coverages     FeatureCoverage[]
+  duplicatesAsA FeatureDuplicate[] @relation("DuplicateA")
+  duplicatesAsB FeatureDuplicate[] @relation("DuplicateB")
 }
 
 model FeatureCoverage {
@@ -208,4 +217,22 @@ model Notification {
   createdAt   DateTime  @default(now())
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FeatureDuplicate {
+  id          String          @id @default(cuid())
+  featureAId  String
+  featureBId  String
+  similarity  Float
+  method      String          // "string", "ai", "both"
+  status      DuplicateStatus @default(PENDING)
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime        @default(now())
+
+  featureA    Feature         @relation("DuplicateA", fields: [featureAId], references: [id], onDelete: Cascade)
+  featureB    Feature         @relation("DuplicateB", fields: [featureBId], references: [id], onDelete: Cascade)
+  resolver    User?           @relation(fields: [resolvedBy], references: [id])
+
+  @@unique([featureAId, featureBId])
 }
