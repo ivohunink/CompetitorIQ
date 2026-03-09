@@ -111,7 +111,6 @@ model Feature {
   description   String?
   categoryId    String?
   subcategoryId String?
-  isOwnProduct  Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

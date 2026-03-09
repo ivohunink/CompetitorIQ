@@ -37,11 +37,11 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, categoryId, subcategoryId, isOwnProduct } = body;
+  const { name, description, categoryId, subcategoryId } = body;
 
   const feature = await prisma.feature.update({
     where: { id: params.id },
-    data: { name, description, categoryId, subcategoryId, isOwnProduct },
+    data: { name, description, categoryId, subcategoryId },
     include: { category: true, subcategory: true },
   });
 

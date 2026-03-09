@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, description, categoryId, subcategoryId, isOwnProduct } = body;
+  const { name, description, categoryId, subcategoryId } = body;
 
   if (!name) {
     return NextResponse.json({ error: "Feature name is required" }, { status: 400 });
@@ -99,7 +99,6 @@ export async function POST(req: NextRequest) {
       description,
       categoryId: finalCategoryId,
       subcategoryId: finalSubcategoryId,
-      isOwnProduct: isOwnProduct || false,
     },
     include: { category: true, subcategory: true },
   });
