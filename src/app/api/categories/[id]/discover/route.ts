@@ -5,6 +5,7 @@ import { fetchPage } from "@/lib/scraper/fetcher";
 import { parseContent } from "@/lib/scraper/parsers";
 import { discoverCategoryFeatures } from "@/lib/ai";
 import { notifyFeatureChange } from "@/lib/notifications";
+import { checkNewFeatureForDuplicates } from "@/lib/duplicates";
 
 export async function POST(
   _request: NextRequest,
@@ -217,6 +218,11 @@ export async function POST(
           // Skip duplicate coverage entries
         }
       }
+
+      // Fire-and-forget duplicate check
+      checkNewFeatureForDuplicates(feature.id, discovered.name).catch((err) =>
+        console.error("Duplicate check failed:", err)
+      );
 
       createdFeatures.push({
         name: discovered.name,

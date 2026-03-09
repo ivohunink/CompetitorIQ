@@ -16,6 +16,7 @@ import {
   LogOut,
   Activity,
   BarChart3,
+  Copy,
 } from "lucide-react";
 import { NotificationBell } from "./notification-bell";
 
@@ -33,6 +34,7 @@ const topNav = [
 
 const reviewNav = [
   { href: "/review", label: "Review Queue", icon: ClipboardCheck },
+  { href: "/duplicates", label: "Duplicates", icon: Copy },
 ];
 
 const analyzeNav = [

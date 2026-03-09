@@ -86,3 +86,14 @@ export async function notifyFeatureChange(
     });
   }
 }
+
+export async function notifyDuplicatesFound(count: number) {
+  if (count <= 0) return;
+
+  await createNotification({
+    type: "new_feature",
+    title: "Potential duplicate features detected",
+    message: `${count} potential duplicate feature${count > 1 ? "s" : ""} found. Review them on the Duplicates page.`,
+    entityType: "FeatureDuplicate",
+  });
+}

@@ -150,6 +150,95 @@ If no features found, return an empty array: []`;
   }
 }
 
+interface DuplicatePair {
+  a: string;
+  b: string;
+  descA?: string;
+  descB?: string;
+}
+
+interface DuplicateJudgment {
+  a: string;
+  b: string;
+  isDuplicate: boolean;
+  confidence: number;
+}
+
+export async function detectDuplicatesAI(
+  pairs: DuplicatePair[]
+): Promise<DuplicateJudgment[]> {
+  if (pairs.length === 0) return [];
+
+  const results: DuplicateJudgment[] = [];
+
+  // Process in batches of 20
+  for (let i = 0; i < pairs.length; i += 20) {
+    const batch = pairs.slice(i, i + 20);
+
+    const pairDescriptions = batch
+      .map((p, idx) => {
+        let line = `${idx + 1}. "${p.a}" vs "${p.b}"`;
+        if (p.descA) line += `\n   A: ${p.descA}`;
+        if (p.descB) line += `\n   B: ${p.descB}`;
+        return line;
+      })
+      .join("\n");
+
+    const prompt = `You are a product analyst. For each pair of product feature names below, determine if they refer to the SAME product capability (just named differently) or are genuinely DIFFERENT features.
+
+Consider:
+- Acronyms vs full names (e.g., "SSO" = "Single Sign-On")
+- Synonyms (e.g., "Chat" ≈ "Messaging")
+- Different phrasing of the same thing (e.g., "Auto-scheduling" ≈ "Automated Schedule Generation")
+- Subset features are NOT duplicates (e.g., "GPS Clock-in" ≠ "Clock-in" — the first is more specific)
+
+Feature pairs:
+${pairDescriptions}
+
+Respond with ONLY valid JSON array, no other text:
+[{"pair": 1, "isDuplicate": true, "confidence": 0.95}, ...]
+
+confidence should be 0.0-1.0 indicating how sure you are they are duplicates.`;
+
+    try {
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        messages: [{ role: "user", content: prompt }],
+      });
+
+      const text =
+        message.content[0].type === "text" ? message.content[0].text : "[]";
+      const cleaned = text
+        .replace(/```json?\n?/g, "")
+        .replace(/```/g, "")
+        .trim();
+      const judgments = JSON.parse(cleaned) as Array<{
+        pair: number;
+        isDuplicate: boolean;
+        confidence: number;
+      }>;
+
+      for (const j of judgments) {
+        const pair = batch[j.pair - 1];
+        if (pair) {
+          results.push({
+            a: pair.a,
+            b: pair.b,
+            isDuplicate: j.isDuplicate,
+            confidence: j.confidence,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("AI duplicate detection failed for batch:", error);
+      // Skip this batch — string similarity results will still be used
+    }
+  }
+
+  return results;
+}
+
 export async function extractFeaturesFromText(
   text: string,
   competitorName: string
