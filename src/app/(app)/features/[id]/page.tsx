@@ -55,7 +55,6 @@ export default async function FeatureDetailPage({
         {feature.subcategory && (
           <Badge variant="default">{feature.subcategory.name}</Badge>
         )}
-        {feature.isOwnProduct && <Badge variant="success">Own Product</Badge>}
       </div>
 
       <Card>

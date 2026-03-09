@@ -80,7 +80,6 @@ CREATE TABLE "Feature" (
     "description" TEXT,
     "categoryId" TEXT,
     "subcategoryId" TEXT,
-    "isOwnProduct" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Feature_pkey" PRIMARY KEY ("id"),

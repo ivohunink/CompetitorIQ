@@ -46,7 +46,6 @@ interface Feature {
   description: string | null;
   categoryId: string | null;
   subcategoryId: string | null;
-  isOwnProduct: boolean;
   category: { id: string; name: string } | null;
   subcategory: { id: string; name: string } | null;
   coverages: Array<{
@@ -92,7 +91,7 @@ export default function ManageCategoriesPage() {
 
   // Feature editing
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
-  const [featureForm, setFeatureForm] = useState({ name: "", description: "", categoryId: "", subcategoryId: "", isOwnProduct: false });
+  const [featureForm, setFeatureForm] = useState({ name: "", description: "", categoryId: "", subcategoryId: "" });
   const [showFeatureModal, setShowFeatureModal] = useState(false);
   const [addingFeatureToCategoryId, setAddingFeatureToCategoryId] = useState<string | null>(null);
 
@@ -284,7 +283,6 @@ export default function ManageCategoriesPage() {
       description: "",
       categoryId,
       subcategoryId: "",
-      isOwnProduct: false,
     });
     setShowFeatureModal(true);
   }
@@ -297,7 +295,6 @@ export default function ManageCategoriesPage() {
       description: feature.description || "",
       categoryId: feature.categoryId || "",
       subcategoryId: feature.subcategoryId || "",
-      isOwnProduct: feature.isOwnProduct,
     });
     setShowFeatureModal(true);
   }
@@ -313,7 +310,6 @@ export default function ManageCategoriesPage() {
       description: featureForm.description || null,
       categoryId: featureForm.categoryId || null,
       subcategoryId: featureForm.subcategoryId || null,
-      isOwnProduct: featureForm.isOwnProduct,
     };
 
     const res = await fetch(url, {
@@ -690,15 +686,6 @@ export default function ManageCategoriesPage() {
               ]}
             />
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={featureForm.isOwnProduct}
-              onChange={(e) => setFeatureForm({ ...featureForm, isOwnProduct: e.target.checked })}
-              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-            />
-            <span className="text-gray-700">This is our own product feature</span>
-          </label>
           <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
@@ -866,9 +853,6 @@ function CategoryRow({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-gray-900 text-sm">{feature.name}</span>
-                                {feature.isOwnProduct && (
-                                  <Badge variant="success">Own</Badge>
-                                )}
                                 {feature.subcategory && (
                                   <Badge variant="default">{feature.subcategory.name}</Badge>
                                 )}
