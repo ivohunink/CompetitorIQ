@@ -32,9 +32,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Clean up scrape runs older than 30 days (cascades to ScrapePageContent and ScrapeFeatureResult)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  await prisma.scrapeRun.deleteMany({
+    where: { createdAt: { lt: thirtyDaysAgo } },
+  });
+
   // Clean up scrape logs older than 30 days
   await prisma.scrapeLog.deleteMany({
-    where: { createdAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+    where: { createdAt: { lt: thirtyDaysAgo } },
   });
 
   return NextResponse.json({

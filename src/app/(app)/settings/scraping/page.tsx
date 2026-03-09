@@ -23,7 +23,9 @@ import {
   ChevronDown,
   ChevronRight,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
+import Link from "next/link";
 
 interface DataSource {
   id: string;
@@ -43,6 +45,7 @@ interface ScrapeResult {
   featuresUpdated: number;
   newFeaturesFound: number;
   errors: string[];
+  runId?: string;
 }
 
 interface ScrapeLogEntry {
@@ -56,6 +59,7 @@ interface ScrapeLogEntry {
   newFeatures: number;
   error: string | null;
   duration: number | null;
+  runId: string | null;
   createdAt: string;
 }
 
@@ -336,7 +340,18 @@ export default function ScrapingConfigPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {scrapeResults[compId] && (
-                      <ScrapeResultBadge result={scrapeResults[compId]} />
+                      <>
+                        <ScrapeResultBadge result={scrapeResults[compId]} />
+                        {scrapeResults[compId].runId && (
+                          <Link
+                            href={`/settings/scraping/runs/${scrapeResults[compId].runId}`}
+                            className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                          >
+                            View Run
+                            <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </>
                     )}
                     <Button
                       size="sm"
@@ -479,6 +494,14 @@ export default function ScrapingConfigPage() {
                 </h3>
                 <p className="text-sm text-gray-500">
                   {logsTotal} total log entries
+                  {" \u00b7 "}
+                  <Link
+                    href="/settings/scraping/runs"
+                    className="text-brand-600 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    View All Runs
+                  </Link>
                 </p>
               </div>
             </div>
@@ -525,6 +548,9 @@ export default function ScrapingConfigPage() {
                         </th>
                         <th className="px-3 py-2 text-right font-medium text-gray-600">
                           Duration
+                        </th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">
+                          Run
                         </th>
                       </tr>
                     </thead>
@@ -595,6 +621,19 @@ export default function ScrapingConfigPage() {
                                 ? `${log.duration}ms`
                                 : `${(log.duration / 1000).toFixed(1)}s`
                               : "-"}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {log.runId ? (
+                              <Link
+                                href={`/settings/scraping/runs/${log.runId}`}
+                                className="inline-flex items-center gap-1 text-xs text-brand-600 hover:underline"
+                              >
+                                Details
+                                <ArrowRight className="h-3 w-3" />
+                              </Link>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
                           </td>
                         </tr>
                       ))}

@@ -12,6 +12,7 @@ export interface ScrapeResult {
   featuresUpdated: number;
   newFeaturesFound: number;
   errors: string[];
+  runId: string;
 }
 
 export async function scrapeCompetitor(
@@ -28,6 +29,17 @@ export async function scrapeCompetitor(
     throw new Error(`Competitor ${competitorId} not found`);
   }
 
+  const runStartTime = Date.now();
+
+  // Create the scrape run record
+  const scrapeRun = await prisma.scrapeRun.create({
+    data: {
+      competitorId,
+      competitorName: competitor.name,
+      status: "running",
+    },
+  });
+
   const result: ScrapeResult = {
     competitorId,
     competitorName: competitor.name,
@@ -36,33 +48,106 @@ export async function scrapeCompetitor(
     featuresUpdated: 0,
     newFeaturesFound: 0,
     errors: [],
+    runId: scrapeRun.id,
   };
 
-  if (competitor.dataSources.length === 0) {
-    result.errors.push("No enabled data sources");
-    return result;
-  }
+  try {
+    if (competitor.dataSources.length === 0) {
+      result.errors.push("No enabled data sources");
+      await finalizeRun(scrapeRun.id, result, runStartTime);
+      return result;
+    }
 
-  // Fetch all known features for matching
-  const features = await prisma.feature.findMany({
-    select: { id: true, name: true },
-  });
-  const featureNameToId = new Map(features.map((f) => [f.name, f.id]));
-  const knownFeatureNames = features.map((f) => f.name);
+    // Fetch all known features for matching
+    const features = await prisma.feature.findMany({
+      select: { id: true, name: true },
+    });
+    const featureNameToId = new Map(features.map((f) => [f.name, f.id]));
+    const knownFeatureNames = features.map((f) => f.name);
 
-  // Scrape each data source and aggregate content
-  const allContent: string[] = [];
-  const successLogIds: string[] = [];
+    // Scrape each data source and aggregate content
+    const allContent: string[] = [];
+    const successLogIds: string[] = [];
 
-  for (const source of competitor.dataSources) {
-    const startTime = Date.now();
-    try {
-      const page = await fetchPage(source.url);
-      const duration = Date.now() - startTime;
+    for (const source of competitor.dataSources) {
+      const startTime = Date.now();
+      try {
+        const page = await fetchPage(source.url);
+        const duration = Date.now() - startTime;
 
-      if (!page.success) {
+        if (!page.success) {
+          result.sourcesFailed++;
+          result.errors.push(`Failed to fetch ${source.url}: ${page.error}`);
+          await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "failed",
+              error: page.error || "Fetch failed",
+              duration,
+              runId: scrapeRun.id,
+            },
+          });
+          continue;
+        }
+
+        const parsed = parseContent(page.html, source.url, source.type);
+        if (parsed.length > 50) {
+          allContent.push(
+            `[Source: ${source.type} - ${source.url}]\n${parsed}`
+          );
+          result.sourcesScraped++;
+          const log = await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "success",
+              contentLength: parsed.length,
+              duration,
+              runId: scrapeRun.id,
+            },
+          });
+          successLogIds.push(log.id);
+
+          // Store the full parsed text for this page
+          await prisma.scrapePageContent.create({
+            data: {
+              scrapeLogId: log.id,
+              rawText: parsed,
+            },
+          });
+        } else {
+          result.sourcesFailed++;
+          result.errors.push(`No meaningful content from ${source.url}`);
+          await prisma.scrapeLog.create({
+            data: {
+              competitorId,
+              competitorName: competitor.name,
+              sourceUrl: source.url,
+              sourceType: source.type,
+              status: "no_content",
+              contentLength: parsed.length,
+              duration,
+              runId: scrapeRun.id,
+            },
+          });
+        }
+
+        // Update lastScraped timestamp
+        await prisma.dataSource.update({
+          where: { id: source.id },
+          data: { lastScraped: new Date() },
+        });
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        const errorMsg =
+          error instanceof Error ? error.message : "Unknown error";
         result.sourcesFailed++;
-        result.errors.push(`Failed to fetch ${source.url}: ${page.error}`);
+        result.errors.push(`Error scraping ${source.url}: ${errorMsg}`);
         await prisma.scrapeLog.create({
           data: {
             competitorId,
@@ -70,161 +155,178 @@ export async function scrapeCompetitor(
             sourceUrl: source.url,
             sourceType: source.type,
             status: "failed",
-            error: page.error || "Fetch failed",
+            error: errorMsg,
             duration,
-          },
-        });
-        continue;
-      }
-
-      const parsed = parseContent(page.html, source.url, source.type);
-      if (parsed.length > 50) {
-        allContent.push(`[Source: ${source.type} - ${source.url}]\n${parsed}`);
-        result.sourcesScraped++;
-        const log = await prisma.scrapeLog.create({
-          data: {
-            competitorId,
-            competitorName: competitor.name,
-            sourceUrl: source.url,
-            sourceType: source.type,
-            status: "success",
-            contentLength: parsed.length,
-            duration,
-          },
-        });
-        successLogIds.push(log.id);
-      } else {
-        result.sourcesFailed++;
-        result.errors.push(`No meaningful content from ${source.url}`);
-        await prisma.scrapeLog.create({
-          data: {
-            competitorId,
-            competitorName: competitor.name,
-            sourceUrl: source.url,
-            sourceType: source.type,
-            status: "no_content",
-            contentLength: parsed.length,
-            duration,
+            runId: scrapeRun.id,
           },
         });
       }
+    }
 
-      // Update lastScraped timestamp
-      await prisma.dataSource.update({
-        where: { id: source.id },
-        data: { lastScraped: new Date() },
-      });
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      result.sourcesFailed++;
-      result.errors.push(`Error scraping ${source.url}: ${errorMsg}`);
-      await prisma.scrapeLog.create({
+    if (allContent.length === 0) {
+      result.errors.push("No content extracted from any source");
+      await finalizeRun(scrapeRun.id, result, runStartTime);
+      return result;
+    }
+
+    // Run AI extraction on combined content
+    const combinedText = allContent.join("\n\n---\n\n");
+    const sourceUrls = competitor.dataSources.map((s) => s.url).join(", ");
+
+    const extraction = await extractFeatureCoverage(
+      combinedText,
+      competitor.name,
+      knownFeatureNames,
+      sourceUrls
+    );
+
+    // Update successful logs with feature counts
+    if (successLogIds.length > 0) {
+      await prisma.scrapeLog.updateMany({
+        where: { id: { in: successLogIds } },
         data: {
-          competitorId,
-          competitorName: competitor.name,
-          sourceUrl: source.url,
-          sourceType: source.type,
-          status: "failed",
-          error: errorMsg,
-          duration,
+          featuresFound: extraction.knownFeatures.length,
+          newFeatures: extraction.newFeatures.length,
         },
       });
     }
-  }
 
-  if (allContent.length === 0) {
-    result.errors.push("No content extracted from any source");
-    return result;
-  }
+    // Store per-feature extraction results
+    const featureResults = [
+      ...extraction.knownFeatures.map((fc) => ({
+        scrapeRunId: scrapeRun.id,
+        featureName: fc.featureName,
+        featureId: featureNameToId.get(fc.featureName) || null,
+        isNew: false,
+        status: fc.status,
+        confidence: fc.confidence,
+        evidence: fc.evidence,
+        sourceUrl: fc.sourceUrl || null,
+        sourceType: null as string | null,
+      })),
+      ...extraction.newFeatures.map((nf) => ({
+        scrapeRunId: scrapeRun.id,
+        featureName: nf.name,
+        featureId: null as string | null,
+        isNew: true,
+        status: null as string | null,
+        confidence: nf.confidence,
+        evidence: nf.description,
+        sourceUrl: nf.sourceUrl || null,
+        sourceType: null as string | null,
+      })),
+    ];
 
-  // Run AI extraction on combined content
-  const combinedText = allContent.join("\n\n---\n\n");
-  const sourceUrls = competitor.dataSources.map((s) => s.url).join(", ");
+    if (featureResults.length > 0) {
+      await prisma.scrapeFeatureResult.createMany({ data: featureResults });
+    }
 
-  const extraction = await extractFeatureCoverage(
-    combinedText,
-    competitor.name,
-    knownFeatureNames,
-    sourceUrls
-  );
+    // Upsert feature coverages with PENDING review status
+    for (const fc of extraction.knownFeatures) {
+      const featureId = featureNameToId.get(fc.featureName);
+      if (!featureId) continue;
 
-  // Update successful logs with feature counts
-  if (successLogIds.length > 0) {
-    await prisma.scrapeLog.updateMany({
-      where: { id: { in: successLogIds } },
-      data: {
-        featuresFound: extraction.knownFeatures.length,
-        newFeatures: extraction.newFeatures.length,
-      },
-    });
-  }
-
-  // Upsert feature coverages with PENDING review status
-  for (const fc of extraction.knownFeatures) {
-    const featureId = featureNameToId.get(fc.featureName);
-    if (!featureId) continue;
-
-    try {
-      await prisma.featureCoverage.upsert({
-        where: {
-          featureId_competitorId: {
+      try {
+        await prisma.featureCoverage.upsert({
+          where: {
+            featureId_competitorId: {
+              featureId,
+              competitorId: competitor.id,
+            },
+          },
+          create: {
             featureId,
             competitorId: competitor.id,
+            status: fc.status,
+            confidence: fc.confidence,
+            evidenceUrl: sourceUrls,
+            notes: fc.evidence,
+            reviewStatus: "PENDING",
+            lastVerified: new Date(),
           },
-        },
-        create: {
-          featureId,
-          competitorId: competitor.id,
-          status: fc.status,
-          confidence: fc.confidence,
-          evidenceUrl: sourceUrls,
-          notes: fc.evidence,
-          reviewStatus: "PENDING",
-          lastVerified: new Date(),
-        },
-        update: {
-          status: fc.status,
-          confidence: fc.confidence,
-          evidenceUrl: sourceUrls,
-          notes: fc.evidence,
-          reviewStatus: "PENDING",
-          lastVerified: new Date(),
-        },
-      });
-      result.featuresUpdated++;
-    } catch (error) {
-      result.errors.push(
-        `Failed to upsert coverage for ${fc.featureName}: ${error instanceof Error ? error.message : "Unknown"}`
+          update: {
+            status: fc.status,
+            confidence: fc.confidence,
+            evidenceUrl: sourceUrls,
+            notes: fc.evidence,
+            reviewStatus: "PENDING",
+            lastVerified: new Date(),
+          },
+        });
+        result.featuresUpdated++;
+      } catch (error) {
+        result.errors.push(
+          `Failed to upsert coverage for ${fc.featureName}: ${error instanceof Error ? error.message : "Unknown"}`
+        );
+      }
+    }
+
+    result.newFeaturesFound = extraction.newFeatures.length;
+
+    // Log new features as audit entries (don't auto-create, flag for review)
+    if (extraction.newFeatures.length > 0) {
+      console.log(
+        `[Scraper] New features found for ${competitor.name}:`,
+        extraction.newFeatures.map((f) => f.name)
       );
     }
-  }
 
-  result.newFeaturesFound = extraction.newFeatures.length;
-
-  // Log new features as audit entries (don't auto-create, flag for review)
-  if (extraction.newFeatures.length > 0) {
-    console.log(
-      `[Scraper] New features found for ${competitor.name}:`,
-      extraction.newFeatures.map((f) => f.name)
-    );
-  }
-
-  // Send in-app notifications
-  if (result.featuresUpdated > 0 || result.newFeaturesFound > 0) {
-    try {
-      await notifyFeatureChange(
-        competitor.name,
-        competitor.id,
-        result.featuresUpdated,
-        result.newFeaturesFound
-      );
-    } catch (error) {
-      console.error("Failed to send notifications:", error);
+    // Send in-app notifications
+    if (result.featuresUpdated > 0 || result.newFeaturesFound > 0) {
+      try {
+        await notifyFeatureChange(
+          competitor.name,
+          competitor.id,
+          result.featuresUpdated,
+          result.newFeaturesFound
+        );
+      } catch (error) {
+        console.error("Failed to send notifications:", error);
+      }
     }
-  }
 
-  return result;
+    await finalizeRun(scrapeRun.id, result, runStartTime);
+    return result;
+  } catch (error) {
+    // Mark run as failed on unhandled exceptions
+    const errorMsg =
+      error instanceof Error ? error.message : "Unknown error";
+    result.errors.push(errorMsg);
+    await prisma.scrapeRun.update({
+      where: { id: scrapeRun.id },
+      data: {
+        status: "failed",
+        totalDuration: Date.now() - runStartTime,
+        errors: JSON.stringify(result.errors),
+        completedAt: new Date(),
+      },
+    });
+    throw error;
+  }
+}
+
+async function finalizeRun(
+  runId: string,
+  result: ScrapeResult,
+  runStartTime: number
+) {
+  await prisma.scrapeRun.update({
+    where: { id: runId },
+    data: {
+      status:
+        result.sourcesFailed > 0 && result.sourcesScraped === 0
+          ? "failed"
+          : "completed",
+      sourcesScraped: result.sourcesScraped,
+      sourcesFailed: result.sourcesFailed,
+      featuresFound: result.featuresUpdated,
+      newFeatures: result.newFeaturesFound,
+      totalDuration: Date.now() - runStartTime,
+      errors:
+        result.errors.length > 0 ? JSON.stringify(result.errors) : null,
+      completedAt: new Date(),
+    },
+  });
 }
 
 export async function getDueCompetitors(): Promise<
