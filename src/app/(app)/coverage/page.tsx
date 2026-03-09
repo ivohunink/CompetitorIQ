@@ -14,7 +14,7 @@ export default async function FeatureCoveragePage() {
         include: {
           coverages: {
             where: { reviewStatus: "APPROVED" },
-            select: { competitorId: true, status: true },
+            select: { competitorId: true, status: true, confidence: true },
           },
         },
       },
@@ -47,18 +47,38 @@ export default async function FeatureCoveragePage() {
             const totalFeatures = cat.features.length;
 
             const competitorCoverage = competitors.map((comp) => {
-              const supported = cat.features.filter((f) =>
+              const supportedFeatures = cat.features.filter((f) =>
                 f.coverages.some(
                   (c) =>
                     c.competitorId === comp.id &&
                     (c.status === "SUPPORTED" || c.status === "PARTIAL")
                 )
-              ).length;
+              );
+              const supported = supportedFeatures.length;
               const pct =
                 totalFeatures > 0
                   ? Math.round((supported / totalFeatures) * 100)
                   : 0;
-              return { name: comp.name, pct };
+
+              // Tally confidence levels across supported coverages
+              const confidenceCounts = { HIGH: 0, MEDIUM: 0, LOW: 0, NONE: 0 };
+              for (const f of supportedFeatures) {
+                const cov = f.coverages.find(
+                  (c) =>
+                    c.competitorId === comp.id &&
+                    (c.status === "SUPPORTED" || c.status === "PARTIAL")
+                );
+                if (cov) {
+                  const key = cov.confidence as keyof typeof confidenceCounts;
+                  if (key && key in confidenceCounts) {
+                    confidenceCounts[key]++;
+                  } else {
+                    confidenceCounts.NONE++;
+                  }
+                }
+              }
+
+              return { name: comp.name, pct, confidenceCounts };
             });
 
             return (
@@ -102,6 +122,26 @@ export default async function FeatureCoveragePage() {
                           </div>
                           <span className="text-xs text-gray-500 w-8 text-right">
                             {cc.pct}%
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            {cc.confidenceCounts.HIGH > 0 && (
+                              <span
+                                className="inline-block h-1.5 w-1.5 rounded-full bg-green-500"
+                                title={`${cc.confidenceCounts.HIGH} high confidence`}
+                              />
+                            )}
+                            {cc.confidenceCounts.MEDIUM > 0 && (
+                              <span
+                                className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400"
+                                title={`${cc.confidenceCounts.MEDIUM} medium confidence`}
+                              />
+                            )}
+                            {cc.confidenceCounts.LOW > 0 && (
+                              <span
+                                className="inline-block h-1.5 w-1.5 rounded-full bg-red-500"
+                                title={`${cc.confidenceCounts.LOW} low confidence`}
+                              />
+                            )}
                           </span>
                         </div>
                       ))}

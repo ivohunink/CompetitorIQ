@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { Plus, Search, Download, Bookmark, Trash2, ChevronDown } from "lucide-react";
+import { cn, formatRelativeDate } from "@/lib/utils";
+import { Plus, Search, Download, Bookmark, Trash2, ChevronDown, ExternalLink, Info } from "lucide-react";
 
 interface SavedFilter {
   id: string;
@@ -27,6 +27,8 @@ interface Feature {
     status: string;
     evidenceUrl: string | null;
     notes: string | null;
+    confidence: string | null;
+    lastVerified: string | null;
     competitor: { id: string; name: string };
   }>;
 }
@@ -78,6 +80,12 @@ const statusConfig: Record<
   },
 };
 
+const confidenceConfig: Record<string, { color: string; label: string }> = {
+  HIGH: { color: "bg-green-500", label: "High confidence" },
+  MEDIUM: { color: "bg-amber-400", label: "Medium confidence" },
+  LOW: { color: "bg-red-500", label: "Low confidence" },
+};
+
 export function FeatureMatrixClient({
   features: initialFeatures,
   competitors,
@@ -99,8 +107,44 @@ export function FeatureMatrixClient({
   const [showSaveFilter, setShowSaveFilter] = useState(false);
   const [filterName, setFilterName] = useState("");
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [tooltip, setTooltip] = useState<{
+    featureId: string;
+    competitorId: string;
+    rect: DOMRect;
+  } | null>(null);
+  const tooltipTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const canEdit = userRole === "ADMIN" || userRole === "EDITOR";
+
+  function handleCellMouseEnter(
+    featureId: string,
+    competitorId: string,
+    e: React.MouseEvent<HTMLTableCellElement>
+  ) {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ featureId, competitorId, rect });
+  }
+
+  function handleCellMouseLeave() {
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setTooltip(null);
+    }, 150);
+  }
+
+  function handleTooltipMouseEnter() {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
+  }
+
+  function handleTooltipMouseLeave() {
+    setTooltip(null);
+  }
 
   const loadSavedFilters = useCallback(async () => {
     try {
@@ -234,6 +278,8 @@ export function FeatureMatrixClient({
                   status: nextStatus,
                   evidenceUrl: null,
                   notes: null,
+                  confidence: null,
+                  lastVerified: new Date().toISOString(),
                   competitor: comp,
                 },
               ],
@@ -442,6 +488,9 @@ export function FeatureMatrixClient({
                       );
                       const status = coverage?.status || "UNKNOWN";
                       const config = statusConfig[status];
+                      const conf = coverage?.confidence
+                        ? confidenceConfig[coverage.confidence]
+                        : null;
 
                       return (
                         <td
@@ -450,18 +499,30 @@ export function FeatureMatrixClient({
                           onClick={() =>
                             handleCellClick(feature.id, comp.id)
                           }
+                          onMouseEnter={(e) =>
+                            handleCellMouseEnter(feature.id, comp.id, e)
+                          }
+                          onMouseLeave={handleCellMouseLeave}
                         >
                           <button
                             className={cn(
-                              "inline-flex h-8 w-8 items-center justify-center rounded-lg text-base font-medium transition-all",
+                              "relative inline-flex h-8 w-8 items-center justify-center rounded-lg text-base font-medium transition-all",
                               config.bg,
                               config.text,
                               canEdit &&
                                 "cursor-pointer hover:ring-2 hover:ring-brand-300"
                             )}
-                            title={`${config.label}${canEdit ? " — Click to change" : ""}`}
+                            title={`${config.label}${conf ? ` — ${conf.label}` : ""}${canEdit ? " — Click to change" : ""}`}
                           >
                             {config.icon}
+                            {coverage && status !== "UNKNOWN" && (
+                              <span
+                                className={cn(
+                                  "absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ring-1 ring-white",
+                                  conf ? conf.color : "bg-gray-300"
+                                )}
+                              />
+                            )}
                           </button>
                         </td>
                       );
@@ -475,26 +536,142 @@ export function FeatureMatrixClient({
       </Card>
 
       {/* Legend */}
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-        <span className="font-medium">Legend:</span>
-        {Object.entries(statusConfig).map(([key, config]) => (
-          <span key={key} className="flex items-center gap-1.5">
-            <span
-              className={cn(
-                "inline-flex h-5 w-5 items-center justify-center rounded text-xs",
-                config.bg,
-                config.text
-              )}
-            >
-              {config.icon}
+      <div className="mt-4 space-y-2 text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-medium">Legend:</span>
+          {Object.entries(statusConfig).map(([key, config]) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <span
+                className={cn(
+                  "inline-flex h-5 w-5 items-center justify-center rounded text-xs",
+                  config.bg,
+                  config.text
+                )}
+              >
+                {config.icon}
+              </span>
+              {config.label}
             </span>
-            {config.label}
+          ))}
+          {canEdit && (
+            <span className="ml-auto italic">Click a cell to cycle status</span>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-medium">Evidence:</span>
+          {Object.entries(confidenceConfig).map(([key, conf]) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <span className={cn("inline-block h-2 w-2 rounded-full", conf.color)} />
+              {conf.label}
+            </span>
+          ))}
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-gray-300" />
+            Unscored
           </span>
-        ))}
-        {canEdit && (
-          <span className="ml-auto italic">Click a cell to cycle status</span>
-        )}
+          <span className="ml-2 flex items-center gap-1 text-gray-400">
+            <Info className="h-3 w-3" />
+            Hover a cell for details
+          </span>
+        </div>
       </div>
+
+      {/* Evidence Tooltip */}
+      {tooltip && (() => {
+        const feature = features.find((f) => f.id === tooltip.featureId);
+        const coverage = feature?.coverages.find(
+          (c) => c.competitorId === tooltip.competitorId
+        );
+        const comp = competitors.find((c) => c.id === tooltip.competitorId);
+        const status = coverage?.status || "UNKNOWN";
+        const config = statusConfig[status];
+        const conf = coverage?.confidence
+          ? confidenceConfig[coverage.confidence]
+          : null;
+
+        const tooltipWidth = 280;
+        const tooltipLeft =
+          tooltip.rect.right + tooltipWidth > window.innerWidth
+            ? tooltip.rect.left - tooltipWidth - 4
+            : tooltip.rect.right + 4;
+        const tooltipTop = tooltip.rect.top;
+
+        return (
+          <div
+            className="fixed z-50 w-[280px] rounded-lg border border-gray-200 bg-white p-3 shadow-lg text-sm"
+            style={{ left: tooltipLeft, top: tooltipTop }}
+            onMouseEnter={handleTooltipMouseEnter}
+            onMouseLeave={handleTooltipMouseLeave}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+                  status === "SUPPORTED" && "bg-green-50 text-green-700 border-green-200",
+                  status === "PARTIAL" && "bg-yellow-50 text-yellow-700 border-yellow-200",
+                  status === "NOT_SUPPORTED" && "bg-red-50 text-red-700 border-red-200",
+                  status === "UNKNOWN" && "bg-gray-50 text-gray-500 border-gray-200"
+                )}
+              >
+                {config.icon} {config.label}
+              </span>
+              {conf ? (
+                <span className="flex items-center gap-1 text-xs text-gray-500">
+                  <span className={cn("inline-block h-2 w-2 rounded-full", conf.color)} />
+                  {conf.label}
+                </span>
+              ) : coverage && status !== "UNKNOWN" ? (
+                <span className="flex items-center gap-1 text-xs text-gray-400">
+                  <span className="inline-block h-2 w-2 rounded-full bg-gray-300" />
+                  Unscored
+                </span>
+              ) : null}
+            </div>
+
+            <p className="text-xs font-medium text-gray-700 mb-1">
+              {comp?.name} &middot; {feature?.name}
+            </p>
+
+            {coverage?.notes ? (
+              <p className="text-xs text-gray-600 mb-2 line-clamp-3">
+                &ldquo;{coverage.notes}&rdquo;
+              </p>
+            ) : (
+              <p className="text-xs text-gray-400 mb-2 italic">
+                No evidence recorded
+              </p>
+            )}
+
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-3">
+                {coverage?.evidenceUrl && (
+                  <a
+                    href={coverage.evidenceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-brand-600 hover:text-brand-700 flex items-center gap-0.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Source <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+                <a
+                  href={`/features/${feature?.id}`}
+                  className="text-brand-600 hover:text-brand-700"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View details &rarr;
+                </a>
+              </div>
+              {coverage?.lastVerified && (
+                <span className="text-gray-400">
+                  {formatRelativeDate(coverage.lastVerified)}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Save Filter Modal */}
       <Modal
